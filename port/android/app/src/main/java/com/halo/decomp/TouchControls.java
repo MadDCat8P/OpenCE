@@ -232,6 +232,8 @@ public final class TouchControls extends View implements SensorEventListener, In
                 return;
             scene = nativeScene();
             updateShowing();
+            // (the gyroscope also follows the scene while the controls hide for a controller)
+            updateSensors();
             readBindings();
             updateRumble();
             postDelayed(this, POLL_MS);
@@ -1164,7 +1166,7 @@ public final class TouchControls extends View implements SensorEventListener, In
     // ---------- the gyroscope and the vibration
 
     private void updateSensors() {
-        boolean needed = deviceInputActive && showing && !hidden && layout.gyroscopeEnabled && gyroscope != null;
+        boolean needed = gyroAiming();
         if (needed && !gyroRegistered) {
             gyroAim.reset();
             gyroRegistered = sensors.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_GAME);
@@ -1177,7 +1179,7 @@ public final class TouchControls extends View implements SensorEventListener, In
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-        if (!deviceInputActive || !showing || hidden || !layout.gyroscopeEnabled || editing || openDialogs > 0) {
+        if (!gyroAiming()) {
             gyroAim.reset();
             return;
         }
@@ -1188,6 +1190,20 @@ public final class TouchControls extends View implements SensorEventListener, In
             nativeGyro(-gyroDelta[0] / LOOK_RADIANS_PER_UNIT * sensitivity,
                 -gyroDelta[1] / LOOK_RADIANS_PER_UNIT * sensitivity);
         }
+    }
+
+    /**
+     * whether the gyroscope aims: in a game (no menu, cinematic, dialog or
+     * layout editing), while the controls show and are not hidden, or while
+     * a controller is connected, which hides the controls but not the gyro
+     */
+    private boolean gyroAiming() {
+        if (!deviceInputActive || !layout.gyroscopeEnabled || gyroscope == null || editing || openDialogs > 0)
+            return false;
+        if (showing)
+            return !hidden;
+        boolean inGame = (scene & SCENE_KNOWN) != 0 && (scene & SCENE_MENUS) == 0;
+        return controllerConnected && inGame;
     }
 
     @Override
